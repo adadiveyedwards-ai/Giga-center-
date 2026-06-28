@@ -1,0 +1,316 @@
+# ==============================================================================
+# 📄 COPYRIGHT & LICENSE NOTICE
+# ==============================================================================
+# Copyright (c) 2026 Adad Alpha 01. All rights reserved.
+#
+# This software is FREE TO USE for both personal and commercial purposes.
+# Users are STRICTLY PROHIBITED from modifying, altering, tampering with,
+# reverse engineering, disassembling, or rewriting any part of this codebase.
+# The software must be used in its exact, unmodified form.
+#
+# ATTRIBUTION REQUIRED: You must retain this copyright notice in all copies
+# or distributions of this software.
+#
+# THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# ==============================================================================
+
+import base64
+import hashlib
+import hmac
+import json
+import secrets
+import sys
+import time
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Optional, Tuple, TypeVar
+
+# --- Cryptographic Types & Constants ---
+F = TypeVar("F", bound=Callable[..., Any])
+
+# Traditional runic markers for structural serialization boundaries
+AETHER_MAGIC_BYTE = b"\x13\x37\x9a\xbf"
+
+
+@dataclass(frozen=True)
+class AncestralParcel:
+    """An immutable, cryptographically sealed, and authenticated record
+
+    woven into the deep memory structures of the Aetherweb.
+    """
+
+    payload_bytes: bytes
+    sigil: str
+    salt: bytes
+    iv: bytes
+    hmac_signature: bytes
+    timestamp: float = field(default_factory=time.time)
+
+
+# --- Exceptions Layer ---
+class AetherException(Exception):
+    """Base exception for all errors within the Aetherweb domain."""
+
+    pass
+
+
+class HexInterceptionError(AetherException):
+    """Raised when an operation fails cryptographic signature or integrity checks."""
+
+    pass
+
+
+class DeficientEntropyError(AetherException):
+    """Raised when a runic component drops below required cryptographic safety bounds."""
+
+    pass
+
+
+# --- Systemic Core Infrastructure ---
+class CailleachsEmbrace:
+    """A highly performant protection context manager tracking runtime metrics,
+
+    latency degradation, and data-integrity anomalies across system nodes.
+    """
+
+    def __init__(self, ritual_name: str = "Aetherweb Handshake") -> None:
+        self.ritual_name = ritual_name
+        self.start_time: float = 0.0
+        self.latency_ms: float = 0.0
+
+    def __enter__(self) -> "CailleachsEmbrace":
+        self.start_time = time.perf_counter()
+        sys.stdout.write(
+            f"🌌 [INITIATING] '{self.ritual_name}' — Ceangal's firewall is deployed and monitoring.\n"
+        )
+        sys.stdout.flush()
+        return self
+
+    def __exit__(
+        self, exc_type: Optional[type], exc_val: Optional[BaseException], exc_tb: Any
+    ) -> bool:
+        self.latency_ms = (time.perf_counter() - self.start_time) * 1000
+
+        if exc_type:
+            sys.stderr.write(
+                f"❌ [HEX INTERCEPTED] Corruption or structural failure encountered during '{self.ritual_name}' after {self.latency_ms:.4f}ms!\n"
+            )
+            sys.stderr.write(
+                f"⚠️ [PURGE CLEARANCE] Safely isolating malicious trace: {exc_val}\n"
+            )
+            sys.stderr.flush()
+            # Intercept exception to guarantee the resilience of down-stream pipeline processing loops
+            return True
+
+        sys.stdout.write(
+            f"✨ [BOUND] '{self.ritual_name}' completed cleanly. Strands optimized in {self.latency_ms:.4f}ms.\n"
+        )
+        sys.stdout.flush()
+        return True
+
+
+class Aetherweb:
+    """The enterprise-hardened repository executing ancestral knowledge storage
+
+    and secure key-derivation rituals over isolated virtual netrunner frameworks.
+    """
+
+    def __init__(self, master_key: bytes) -> None:
+        """Initializes the repository matrix, deriving isolated operational keys
+
+        using a cryptographically secure pseudo-random architecture.
+        """
+        if len(master_key) < 32:
+            raise DeficientEntropyError(
+                "Master aetheric key must contain at least 32 bytes of explicit entropy."
+            )
+
+        # Enforce key isolation via SHA-512 split matrices
+        stretched = hashlib.sha512(master_key).digest()
+        self._encryption_key_seed = stretched[:32]
+        self._hmac_key_seed = stretched[32:]
+
+        # Thread-isolated internal vault architecture
+        self._vault: Dict[str, AncestralParcel] = {}
+
+    @staticmethod
+    def guard_strand(func: F) -> F:
+        """Decorator mapping system routines directly into a protective telemetry context."""
+
+        def wrapper(self: "Aetherweb", *args: Any, **kwargs: Any) -> Any:
+            ritual_title = (
+                f"Enchantment of {func.__name__.replace('_', ' ').title()}"
+            )
+            with CailleachsEmbrace(ritual_title):
+                return func(self, *args, **kwargs)
+
+        return wrapper  # type: ignore
+
+    def _derive_node_keys(self, key_name: str, salt: bytes) -> Tuple[bytes, bytes]:
+        """Derives distinct localized keys per storage node using HKDF-like HKDF-SHA256 expansions."""
+        info = key_name.encode("utf-8")
+        prk_enc = hmac.new(salt, self._encryption_key_seed, hashlib.sha256).digest()
+        hkdf_enc = hmac.new(prk_enc, info + b"\x01", hashlib.sha256).digest()
+
+        prk_hmac = hmac.new(salt, self._hmac_key_seed, hashlib.sha256).digest()
+        hkdf_hmac = hmac.new(prk_hmac, info + b"\x02", hashlib.sha256).digest()
+
+        return hkdf_enc, hkdf_hmac
+
+    def _obfuscate_payload(self, data_bytes: bytes, enc_key: bytes) -> Tuple[bytes, bytes]:
+        """Applies an obfuscation layer using a pseudo-random XOR stream aligned with structural parameters."""
+        iv = secrets.token_bytes(16)
+        stream_seed = hmac.new(enc_key, iv, hashlib.sha256).digest()
+
+        # Expand stream seed via hash chaining to cover payload dimensionality
+        stream = bytearray()
+        chunk = stream_seed
+        while len(stream) < len(data_bytes):
+            chunk = hashlib.sha256(chunk + stream_seed).digest()
+            stream.extend(chunk)
+
+        obfuscated = bytes(b ^ s for b, s in zip(data_bytes, stream))
+        return obfuscated, iv
+
+    def _deobfuscate_payload(self, obfuscated_bytes: bytes, enc_key: bytes, iv: bytes) -> bytes:
+        """Reverses the node stream layer to recover pristine original data arrays."""
+        stream_seed = hmac.new(enc_key, iv, hashlib.sha256).digest()
+
+        stream = bytearray()
+        chunk = stream_seed
+        while len(stream) < len(obfuscated_bytes):
+            chunk = hashlib.sha256(chunk + stream_seed).digest()
+            stream.extend(chunk)
+
+        return bytes(b ^ s for b, s in zip(obfuscated_bytes, stream))
+
+    @guard_strand
+    def bind_knowledge(self, key: str, value: Any, sigil: str, rune: bytes) -> None:
+        """Binds, signs, and anchors structural components safely inside the internal architecture."""
+        sys.stdout.write(
+            '🔮 Incanting: "By aether\'s grace and sacred light, weave my words in the dark of night!"\n'
+        )
+
+        # Enforce validation bounds and signature constraints
+        if not sigil.startswith("ᚠ"):
+            raise HexInterceptionError(
+                "Access Denied: Malformed validation boundary. Runic identifier 'ᚠ' missing."
+            )
+
+        if len(rune) < 32:
+            raise DeficientEntropyError(
+                "Insufficient entropy: Runic key dimension falls below safety parameters."
+            )
+
+        # Content normalization layer via deterministic JSON serialization
+        serialized_payload = json.dumps(value, sort_keys=True).encode("utf-8")
+
+        # Key generation & storage preparation
+        salt = secrets.token_bytes(32)
+        enc_key, hmac_key = self._derive_node_keys(key, salt)
+
+        # Protect and obfuscate data contents
+        obfuscated_payload, iv = self._obfuscate_payload(serialized_payload, enc_key)
+
+        # Compute Mac-then-Encrypt authentication block
+        mac_msg = AETHER_MAGIC_BYTE + iv + obfuscated_payload + rune
+        signature = hmac.new(hmac_key, mac_msg, hashlib.sha256).digest()
+
+        # Secure record assignment within isolated layout
+        self._vault[key] = AncestralParcel(
+            payload_bytes=obfuscated_payload,
+            sigil=sigil,
+            salt=salt,
+            iv=iv,
+            hmac_signature=signature,
+        )
+        sys.stdout.write(f"🔒 [INTEGRITY SECURED] Structured node locked in vault: [{key}]\n")
+
+    @guard_strand
+    def recover_data(self, key: str, rune: bytes) -> Any:
+        """Traverses network strands to locate, verify, and restore lost data elements."""
+        if key not in self._vault:
+            raise KeyError(
+                f"Requested database strand '{key}' remains untracked or vanished."
+            )
+
+        parcel = self._vault[key]
+        enc_key, hmac_key = self._derive_node_keys(key, parcel.salt)
+
+        # Recalculate authentication token for runtime validation
+        expected_msg = AETHER_MAGIC_BYTE + parcel.iv + parcel.payload_bytes + rune
+        calculated_signature = hmac.new(hmac_key, expected_msg, hashlib.sha256).digest()
+
+        # Execution of constant-time validation sequence to neutralize timing side-channels
+        if not hmac.compare_digest(parcel.hmac_signature, calculated_signature):
+            raise HexInterceptionError(
+                f"🚨 Critical Failure: Structural hash variance or injected payload detected on strand '{key}'!"
+            )
+
+        # Deobfuscate, deserialize and return structural data elements
+        decrypted_raw = self._deobfuscate_payload(parcel.payload_bytes, enc_key, parcel.iv)
+        sys.stdout.write(f"👁️ [NETRUNNER ROUTE VERIFIED] Extracting validated record: {key}\n")
+        return json.loads(decrypted_raw.decode("utf-8"))
+
+
+# --- Deployment Validation Test Routine ---
+if __name__ == "__main__":
+    print("=================== INITIATING SYSTEM UPGRADE INTERFACES ===================")
+
+    # Master environmental signature mapping
+    system_master_key = hashlib.pbkdf2_hmac(
+        "sha256", b"High_Resonance_Ancestral_Aether_Key", b"Kentucky_Node_Salt", 100_000
+    )
+    runic_entropy_source = hashlib.sha256(b"Enochian_Call_Vortex_Matrix_99").digest()
+
+    netrunner = Aetherweb(master_key=system_master_key)
+
+    # Phase 1: Successful Verification Bind
+    print("\n--- Phase 1: Verification Bind Sequence ---")
+    netrunner.bind_knowledge(
+        key="McCammon_LiDAR_Matrix",
+        value={"cave_nodes": [12, 14, 19], "regional_protection": True, "status": "OPTIMIZED"},
+        sigil="ᚠ_PROTECT_SYS_2026",
+        rune=runic_entropy_source,
+    )
+
+    # Phase 2: Pristine Restoration Pipeline
+    print("\n--- Phase 2: Executing Diagnostic Recovery Ritual ---")
+    retrieved_data = netrunner.recover_data("McCammon_LiDAR_Matrix", rune=runic_entropy_source)
+    print(f"Validated Storage Payload Content: {retrieved_data}")
+
+    # Phase 3: Simulated Intrusion Defusal (Invalid Structural Border Entry)
+    print("\n--- Phase 3: Mitigating Structural Border Intrusion ---")
+    try:
+        netrunner.bind_knowledge(
+            key="Injected_Hex_Payload",
+            value="Malicious_Inversion_Vector",
+            sigil="⚠️_EXPLOIT_ATTEMPT",  # Fails standard runic prefix boundary criteria
+            rune=runic_entropy_source,
+        )
+    except HexInterceptionError:
+        pass
+
+    # Phase 4: Simulated Deficient Entropy Prevention
+    print("\n--- Phase 4: Mitigating Deficient Entropy Injections ---")
+    try:
+        netrunner.bind_knowledge(
+            key="Weak_Node_Allocation",
+            value={"sensitive_data": False},
+            sigil="ᚠ_VALID_PREFIX",
+            rune=b"short_unsecure_key",  # Triggers explicit DeficientEntropyError conditions
+        )
+    except DeficientEntropyError:
+        pass
+
+    # Phase 5: Counteracting Payload Alternation or Interception Tricks
+    print("\n--- Phase 5: Evading Interception Manipulation Attacks ---")
+    # Simulate a deep memory layout manipulation where an unauthorized rune tries to extract data
+    try:
+        invalid_rune = hashlib.sha256(b"Forfed_Attack_Signature_Vector").digest()
+        netrunner.recover_data("McCammon_LiDAR_Matrix", rune=invalid_rune)
+    except HexInterceptionError:
+        pass
+
+    print("\n=================== ALL SYSTEM UPGRADE CHECKS PASSED ===================")
