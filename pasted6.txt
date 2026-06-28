@@ -1,0 +1,234 @@
+#!/usr/bin/env python3
+# ==============================================================================
+# 📄 COPYRIGHT & LICENSE NOTICE
+# ==============================================================================
+# Copyright (c) 2026 Adad Alpha 01. All rights reserved.
+#
+# This software is FREE TO USE for both personal and commercial purposes.
+# Users are STRICTLY PROHIBITED from modifying, altering, tampering with,
+# reverse engineering, disassembling, or rewriting any part of this codebase.
+# The software must be used in its exact, unmodified form.
+#
+# ATTRIBUTION REQUIRED: You must retain this copyright notice in all copies
+# or distributions of this software.
+#
+# THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# ==============================================================================
+
+import base64
+import hashlib
+import hmac
+import json
+import secrets
+import sys
+import time
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Optional, Tuple, TypeVar
+
+# --- Cryptographic Types & Constants ---
+F = TypeVar("F", bound=Callable[..., Any])
+AETHER_MAGIC_BYTE = b"\x13\x37\x9a\xbf"
+
+@dataclass(frozen=True)
+class AncestralParcel:
+    """An immutable, cryptographically sealed record stored in the Aetherweb."""
+    payload_bytes: bytes
+    sigil: str
+    salt: bytes
+    iv: bytes
+    hmac_signature: bytes
+    timestamp: float = field(default_factory=time.time)
+
+
+# --- Domain Exceptions ---
+class AetherException(Exception): pass
+class HexInterceptionError(AetherException): pass
+class DeficientEntropyError(AetherException): pass
+
+
+# --- Context Manager for Telemetry ---
+class CailleachsEmbrace:
+    """Monitors ritual latency and encapsulates runtime hexes/errors."""
+    def __init__(self, ritual_name: str = "Aetherweb Handshake") -> None:
+        self.ritual_name = ritual_name
+        self.start_time: float = 0.0
+
+    def __enter__(self) -> "CailleachsEmbrace":
+        self.start_time = time.perf_counter()
+        print(f"\n🌌 [INITIATING] '{self.ritual_name}' — Ceangal's firewall is deployed.")
+        return self
+
+    def __exit__(self, exc_type: Optional[type], exc_val: Optional[BaseException], exc_tb: Any) -> bool:
+        latency_ms = (time.perf_counter() - self.start_time) * 1000
+        if exc_type:
+            print(f"❌ [HEX INTERCEPTED] Failure during '{self.ritual_name}' after {latency_ms:.2f}ms!")
+            print(f"⚠️ [PURGE] Confining anomaly safely: {exc_val}")
+            return True  # Swallow error to keep interactive CLI loop running smoothly
+        print(f"✨ [BOUND] '{self.ritual_name}' completed in {latency_ms:.2f}ms. Strands optimized.")
+        return True
+
+
+# --- Core Engine ---
+class Aetherweb:
+    def __init__(self, master_key: bytes) -> None:
+        if len(master_key) < 32:
+            raise DeficientEntropyError("Master key must contain at least 32 bytes of explicit entropy.")
+        
+        stretched = hashlib.sha512(master_key).digest()
+        self._encryption_key_seed = stretched[:32]
+        self._hmac_key_seed = stretched[32:]
+        self._vault: Dict[str, AncestralParcel] = {}
+
+    @staticmethod
+    def guard_strand(func: F) -> F:
+        def wrapper(self: "Aetherweb", *args: Any, **kwargs: Any) -> Any:
+            ritual_title = f"Ritual of {func.__name__.replace('_', ' ').title()}"
+            with CailleachsEmbrace(ritual_title):
+                return func(self, *args, **kwargs)
+        return wrapper  # type: ignore
+
+    def _derive_node_keys(self, key_name: str, salt: bytes) -> Tuple[bytes, bytes]:
+        info = key_name.encode("utf-8")
+        prk_enc = hmac.new(salt, self._encryption_key_seed, hashlib.sha256).digest()
+        hkdf_enc = hmac.new(prk_enc, info + b"\x01", hashlib.sha256).digest()
+        prk_hmac = hmac.new(salt, self._hmac_key_seed, hashlib.sha256).digest()
+        hkdf_hmac = hmac.new(prk_hmac, info + b"\x02", hashlib.sha256).digest()
+        return hkdf_enc, hkdf_hmac
+
+    def _obfuscate_payload(self, data_bytes: bytes, enc_key: bytes) -> Tuple[bytes, bytes]:
+        iv = secrets.token_bytes(16)
+        stream_seed = hmac.new(enc_key, iv, hashlib.sha256).digest()
+        stream = bytearray()
+        while len(stream) < len(data_bytes):
+            stream_seed = hashlib.sha256(stream_seed).digest()
+            stream.extend(stream_seed)
+        obfuscated = bytes(b ^ s for b, s in zip(data_bytes, stream))
+        return obfuscated, iv
+
+    def _deobfuscate_payload(self, obfuscated_bytes: bytes, enc_key: bytes, iv: bytes) -> bytes:
+        stream_seed = hmac.new(enc_key, iv, hashlib.sha256).digest()
+        stream = bytearray()
+        while len(stream) < len(obfuscated_bytes):
+            stream_seed = hashlib.sha256(stream_seed).digest()
+            stream.extend(stream_seed)
+        return bytes(b ^ s for b, s in zip(obfuscated_bytes, stream))
+
+    @guard_strand
+    def bind_knowledge(self, key: str, value: Any, sigil: str, rune: bytes) -> None:
+        print('🔮 Incanting: "By aether\'s grace and sacred light, weave my words in the dark of night!"')
+        
+        if not sigil.startswith("ᚠ"):
+            raise HexInterceptionError("Access Denied: Runic signature boundary identifier 'ᚠ' missing.")
+        if len(rune) < 16:
+            raise DeficientEntropyError("Insufficient entropy: Secret Runic passphrase is too short.")
+
+        serialized_payload = json.dumps(value, sort_keys=True).encode("utf-8")
+        salt = secrets.token_bytes(32)
+        enc_key, hmac_key = self._derive_node_keys(key, salt)
+        obfuscated_payload, iv = self._obfuscate_payload(serialized_payload, enc_key)
+
+        mac_msg = AETHER_MAGIC_BYTE + iv + obfuscated_payload + rune
+        signature = hmac.new(hmac_key, mac_msg, hashlib.sha256).digest()
+
+        self._vault[key] = AncestralParcel(
+            payload_bytes=obfuscated_payload, sigil=sigil, salt=salt, iv=iv, hmac_signature=signature
+        )
+        print(f"🔒 [SUCCESS] Securely anchored node: [{key}]")
+
+    @guard_strand
+    def recover_data(self, key: str, rune: bytes) -> Any:
+        if key not in self._vault:
+            raise KeyError(f"The structural strand '{key}' does not exist in this memory vector.")
+
+        parcel = self._vault[key]
+        enc_key, hmac_key = self._derive_node_keys(key, parcel.salt)
+
+        expected_msg = AETHER_MAGIC_BYTE + parcel.iv + parcel.payload_bytes + rune
+        calculated_signature = hmac.new(hmac_key, expected_msg, hashlib.sha256).digest()
+
+        if not hmac.compare_digest(parcel.hmac_signature, calculated_signature):
+            raise HexInterceptionError("🚨 Security Alert: Decryption failed! Incorrect rune or malicious payload modification.")
+
+        decrypted_raw = self._deobfuscate_payload(parcel.payload_bytes, enc_key, parcel.iv)
+        return json.loads(decrypted_raw.decode("utf-8"))
+
+    def list_strands(self) -> list:
+        return [(k, v.sigil, time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(v.timestamp))) for k, v in self._vault.items()]
+
+
+# --- Interactive CLI Interface Application ---
+def run_aetherweb_console():
+    print("=" * 65)
+    print("       🌌 AETHERWEB OPERATIONAL INTERFACE v2.0 (2026) 🌌       ")
+    print("   Secure Cryptographic Pipeline & Knowledge Storage Terminal  ")
+    print("=" * 65)
+
+    # Initialize Master Key Securely
+    passphrase = input("🔑 Establish Master Aetheric Passphrase (min 12 chars): ")
+    if len(passphrase) < 12:
+        print("❌ Master key initialization rejected: Insufficient entropy. Exiting.")
+        sys.exit(1)
+    
+    master_key = hashlib.sha256(passphrase.encode()).digest()
+    engine = Aetherweb(master_key)
+    print("\n✅ Aetheric core synchronized. Firewall initialized.")
+
+    while True:
+        print("\n--- Main Operational Menu ---")
+        print("1. [Bind]   Weave New Knowledge into the Strands")
+        print("2. [Recover] Execute Data Recovery Ritual")
+        print("3. [Status]  Inspect Active Network Map Registry")
+        print("4. [Sever]   Disconnect Terminal (Exit)")
+        
+        choice = input("\nSelect system command (1-4): ").strip()
+
+        if choice == "1":
+            print("\n--- Initialize Binding Ritual ---")
+            key = input("🏷️  Enter Node Identifier (Storage Key): ").strip()
+            val_input = input("📝 Enter Information Content (Text/JSON format): ").strip()
+            sigil = input("🔱 Enter Guard Sigil (Must start with 'ᚠ'): ").strip()
+            rune_str = input("🗝️  Enter Secret Runic Key (Passphrase to unlock this specific item): ").strip()
+
+            # Attempt parsing text as json structure, fall back to clean string
+            try:
+                value_parsed = json.loads(val_input)
+            except json.JSONDecodeError:
+                value_parsed = val_input
+
+            engine.bind_knowledge(key, value_parsed, sigil, rune_str.encode())
+
+        elif choice == "2":
+            print("\n--- Initialize Recovery Ritual ---")
+            key = input("🔎 Enter Node Identifier to Recover: ").strip()
+            rune_str = input("🗝️  Provide Secret Runic Key to Unlock: ").strip()
+
+            result = engine.recover_data(key, rune_str.encode())
+            if result is not None:
+                print(f"\n👁️  [DECRYPTED PAYLOAD FOUND]:")
+                print(json.dumps(result, indent=4, ensure_ascii=False) if isinstance(result, (dict, list)) else f"👉 {result}")
+
+        elif choice == "3":
+            print("\n--- Active Aetheric Registry Map ---")
+            strands = engine.list_strands()
+            if not strands:
+                print("📭 The network strands are empty. No active data records bound.")
+            else:
+                print(f"{'Node Identifier':<25} | {'Sigil Signature':<20} | {'Time Anchored'}")
+                print("-" * 65)
+                for name, sig, ts in strands:
+                    print(f"{name:<25} | {sig:<20} | {ts}")
+
+        elif choice == "4":
+            print("\n🌌 Severing system handshake. Purging volatile cache layers... Safe journey.")
+            break
+        else:
+            print("❌ Selection unrecognized across known system paths.")
+
+
+if __name__ == "__main__":
+    try:
+        run_aetherweb_console()
+    except KeyboardInterrupt:
+        print("\n\n⚠️ Emergency Interruption detected. Safe-collapsing terminal link.")
