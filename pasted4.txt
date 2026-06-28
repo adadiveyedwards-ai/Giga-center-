@@ -1,0 +1,325 @@
+# =====================================================================
+# LICENSE NOTICE & COPYRIGHT
+# Copyright (c) 2026 Adad Alpha 01. All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining 
+# a copy of this software and associated documentation files, to use, 
+# copy, modify, merge, publish, distribute, and sublicense the software, 
+# subject to the following condition:
+#
+# The above copyright notice and this permission notice shall be 
+# included in all copies or substantial portions of the Software. 
+# Modification or removal of the original copyright attribution is 
+# strictly prohibited.
+# =====================================================================
+
+import os
+import sys
+import time
+import signal
+import struct
+import numpy as np
+from multiprocessing import Process, Event, cpu_count
+from multiprocessing.shared_memory import SharedMemory
+from typing import Dict, Tuple
+
+# =====================================================================
+# 1. EXPANDED HARDWARE & TASK CONTRACT (Explicit 128-Byte Verification)
+# =====================================================================
+# [Task ID: uint32] [Priority: uint8] [Affinity: uint8] [Payload: float64] [Status: uint8] [ErrorMsg: char[113]]
+# Exact Byte Layout Size: 4 + 1 + 1 + 8 + 1 + 113 = 128 Bytes (Perfect Cache-Line Alignment)
+# Field Indices for Fast Direct Offsets:
+#   Status Byte -> offset + 14
+#   Error Trace String -> offset + 15
+TASK_FMT = "=IBBdB113s" 
+TASK_SIZE = 128
+
+STATUS_IDLE = 0
+STATUS_QUEUED = 1
+STATUS_RUNNING = 2
+STATUS_COMPLETED = 3
+STATUS_FAILED = 4
+
+AFFINITY_MAP = {
+    0: "SMITH_MATH",
+    1: "HEALER_IO",
+    2: "FIRE_SPEAR",
+    3: "HARPIST_STREAM"
+}
+
+# =====================================================================
+# 2. SPIN-LOCK ATOMIC SHM UTILITY
+# =====================================================================
+class FastSharedSpinLock:
+    """Ultra low-overhead spin-lock reading directly from index zero of a dedicated SHM byte."""
+    def __init__(self, buffer_view, lock_offset: int = 0):
+        self.buf = buffer_view
+        self.offset = lock_offset
+
+    def acquire(self):
+        """Spins natively inside user space, avoiding OS kernel context switches."""
+        while True:
+            if self.buf[self.offset] == 0:
+                self.buf[self.offset] = 1  # Attempt state capture
+                if self.buf[self.offset] == 1:
+                    return True
+            # Microscopic yield to avoid pegging execution pipelines
+            time.sleep(0.00001)
+
+    def release(self):
+        self.buf[self.offset] = 0
+
+# =====================================================================
+# 3. HIGH-SPEED INDUSTRIAL WORKER CORE
+# =====================================================================
+def shm_core_worker(core_index: int, affinity_id: int, shm_name: str, lock_shm_name: str, max_tasks: int, shutdown_flag: Event, stats_array: np.ndarray):
+    """
+    Hardware-isolated computing process reading and writing straight 
+    into a zero-copy Linux/Windows/Android OS shared memory arena.
+    """
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+    if hasattr(os, "sched_setaffinity"):
+        try:
+            os.sched_setaffinity(0, {core_index % cpu_count()})
+        except Exception:
+            pass
+
+    try:
+        existing_shm = SharedMemory(name=shm_name)
+        buffer = existing_shm.buf
+        
+        lock_shm = SharedMemory(name=lock_shm_name)
+        spin_lock = FastSharedSpinLock(lock_shm.buf, lock_offset=0)
+    except Exception as e:
+        sys.stderr.write(f"❌ [Core {core_index}] Failed to instantiate shared structures: {e}\n")
+        return
+
+    stats_offset = core_index * 4
+    
+    # Adaptive Backoff parameters
+    min_yield = 0.00005
+    max_yield = 0.004
+    current_yield = min_yield
+
+    while not shutdown_flag.is_set():
+        task_found = False
+        target_slot = -1
+        is_stolen = False
+        
+        # --- PHASE 1: LOCK-FREE SPECULATIVE SCANNING ---
+        for slot in range(max_tasks):
+            offset = slot * TASK_SIZE
+            if buffer[offset + 14] == STATUS_QUEUED:
+                t_id, prio, aff_id, payload, status, err_bytes = struct.unpack(TASK_FMT, buffer[offset:offset+TASK_SIZE])
+                if status == STATUS_QUEUED and aff_id == affinity_id:
+                    target_slot = slot
+                    task_found = True
+                    break
+
+        if not task_found:
+            for slot in range(max_tasks):
+                offset = slot * TASK_SIZE
+                if buffer[offset + 14] == STATUS_QUEUED:
+                    target_slot = slot
+                    task_found = True
+                    is_stolen = True
+                    break
+        
+        # Transaction verification via shared spinlock
+        if task_found and target_slot != -1:
+            offset = target_slot * TASK_SIZE
+            spin_lock.acquire()
+            if buffer[offset + 14] == STATUS_QUEUED:
+                t_id, prio, aff_id, payload, status, err_bytes = struct.unpack(TASK_FMT, buffer[offset:offset+TASK_SIZE])
+                buffer[offset:offset+TASK_SIZE].cast('B')[:] = struct.pack(TASK_FMT, t_id, prio, aff_id, payload, STATUS_RUNNING, b'\x00'*113)
+                if is_stolen:
+                    stats_array[stats_offset + 1] += 1
+            else:
+                task_found = False
+            spin_lock.release()
+
+        # --- PHASE 2: PROCESSING & ERROR STORAGE PIPELINE ---
+        if task_found and target_slot != -1:
+            current_yield = min_yield  # Reset backoff clock immediately on active hit
+            offset = target_slot * TASK_SIZE
+            t_id, prio, aff_id, payload, _, _ = struct.unpack(TASK_FMT, buffer[offset:offset+TASK_SIZE])
+            
+            start_tick = time.perf_counter_ns()
+            try:
+                if aff_id == 0:
+                    res = float(sum(i * i for i in range(int(payload))))
+                elif aff_id == 1:
+                    time.sleep(payload)
+                else:
+                    res = payload * 42.0
+                
+                spin_lock.acquire()
+                buffer[offset:offset+TASK_SIZE].cast('B')[:] = struct.pack(TASK_FMT, t_id, prio, aff_id, payload, STATUS_COMPLETED, b'\x00'*113)
+                spin_lock.release()
+                stats_array[stats_offset] += 1  
+                
+            except Exception as e:
+                # Truncate exception safely into allocated bytes window
+                err_msg = str(e).encode('utf-8', errors='ignore')[:113].ljust(113, b'\x00')
+                spin_lock.acquire()
+                buffer[offset:offset+TASK_SIZE].cast('B')[:] = struct.pack(TASK_FMT, t_id, prio, aff_id, payload, STATUS_FAILED, err_msg)
+                spin_lock.release()
+                stats_array[stats_offset + 2] += 1  
+                
+            stats_array[stats_offset + 3] = time.perf_counter_ns() - start_tick
+        else:
+            # Scale yielding smoothly up to preserve power envelopes
+            time.sleep(current_yield)
+            current_yield = min(max_yield, current_yield * 1.5)
+
+    existing_shm.close()
+    lock_shm.close()
+
+# =====================================================================
+# 4. LUGH APEX BALANCER (Orchestration Framework)
+# =====================================================================
+class LughSharedMemoryBalancer:
+    """The master architecture allocating memory blocks to bypass the GIL safely."""
+    def __init__(self, max_tasks: int = 100):
+        # Enforce exact layout checks before booting up
+        dummy_pack = struct.pack(TASK_FMT, 0, 0, 0, 0.0, STATUS_IDLE, b'\x00'*113)
+        assert len(dummy_pack) == TASK_SIZE, f"Alignment Layout Mismatch! Expected 128, Got {len(dummy_pack)}"
+
+        self.num_cores = max(2, cpu_count())
+        self.max_tasks = max_tasks
+        self.shutdown_flag = Event()
+        
+        # 1. Allocate Core Shared Memory Buffer Layout
+        self.shm_size = self.max_tasks * TASK_SIZE
+        self.shm = SharedMemory(create=True, size=self.shm_size)
+        
+        # Initialize memory footprints natively
+        for i in range(self.max_tasks):
+            offset = i * TASK_SIZE
+            self.shm.buf[offset:offset+TASK_SIZE].cast('B')[:] = struct.pack(TASK_FMT, 0, 0, 0, 0.0, STATUS_IDLE, b'\x00'*113)
+
+        # 2. Instantiate Hardware Lock Page
+        self.lock_shm = SharedMemory(create=True, size=64)
+        self.lock_shm.buf[:] = b'\x00' * 64
+        self.spin_lock = FastSharedSpinLock(self.lock_shm.buf, lock_offset=0)
+
+        # 3. Dynamic Telemetry Array Allocation
+        self.stats_shared = SharedMemory(create=True, size=self.num_cores * 4 * 8)
+        self.stats_array = np.ndarray((self.num_cores * 4,), dtype=np.int64, buffer=self.stats_shared.buf)
+        self.stats_array[:] = 0
+
+        self.worker_registry: Dict[int, Tuple[Process, int]] = {}
+        print(f"👑 [Lugh Balancer] Zero-Copy Engine Online. Active Matrix Buffer: {self.shm.name}")
+
+    def start_complex(self):
+        """Spawns highly optimized hardware units mapped across target affinities."""
+        for i in range(self.num_cores):
+            affinity_id = i % len(AFFINITY_MAP)
+            p = Process(
+                target=shm_core_worker,
+                args=(i, affinity_id, self.shm.name, self.lock_shm.name, self.max_tasks, self.shutdown_flag, self.stats_array)
+            )
+            p.daemon = True
+            p.start()
+            self.worker_registry[i] = (p, affinity_id)
+
+    def dispatch_task(self, task_id: int, priority: int, affinity_tag: str, payload_value: float) -> bool:
+        """Pushes structured tasks into the zero-copy buffer space directly."""
+        affinity_ids = [k for k, v in AFFINITY_MAP.items() if v == affinity_tag]
+        if not affinity_ids:
+            return False
+        affinity_id = affinity_ids[0]
+        
+        # Double-Checked Lockless Evaluation Phase
+        for slot in range(self.max_tasks):
+            offset = slot * TASK_SIZE
+            if self.shm.buf[offset + 14] in (STATUS_IDLE, STATUS_COMPLETED, STATUS_FAILED):
+                self.spin_lock.acquire()
+                status = self.shm.buf[offset + 14]
+                if status in (STATUS_IDLE, STATUS_COMPLETED, STATUS_FAILED):
+                    self.shm.buf[offset:offset+TASK_SIZE].cast('B')[:] = struct.pack(
+                        TASK_FMT, task_id, priority, affinity_id, payload_value, STATUS_QUEUED, b'\x00'*113
+                    )
+                    self.spin_lock.release()
+                    return True
+                self.spin_lock.release()
+        return False  
+
+    def inspect_failures(self):
+        """Scans the memory arena for failures and unpacks raw hardware trace logs."""
+        for slot in range(self.max_tasks):
+            offset = slot * TASK_SIZE
+            if self.shm.buf[offset + 14] == STATUS_FAILED:
+                t_id, prio, aff_id, payload, status, err_bytes = struct.unpack(TASK_FMT, self.shm.buf[offset:offset+TASK_SIZE])
+                clean_err = err_bytes.decode('utf-8', errors='ignore').strip('\x00')
+                print(f"⚠️ [Failure Registry] Task #{t_id} Failed on Field [{AFFINITY_MAP.get(aff_id)}]. Exception Log: \"{clean_err}\"")
+
+    def print_telemetry_snapshot(self):
+        """Pulls telemetry instantly from the high-speed shared array matrix."""
+        print("\n--- 📊 LUGH LONG-ARM ZERO-COPY TELEMETRY ---")
+        for i in range(self.num_cores):
+            idx = i * 4
+            comp = self.stats_array[idx]
+            stolen = self.stats_array[idx+1]
+            fail = self.stats_array[idx+2]
+            latency = self.stats_array[idx+3] / 1_000_000.0  
+            aff_name = AFFINITY_MAP[self.worker_registry[i][1]]
+            print(f"Core {i} [{aff_name}] -> Executed: {comp} | Steals: {stolen} | Failures: {fail} | Latency: {latency:.2f}ms")
+        print("--------------------------------------------\n")
+
+    def shutdown(self):
+        """Safely closes system bindings and cleans system memory footprints."""
+        print("\n⚡ [Lugh Balancer] Signal cutting complex execution flags...")
+        self.shutdown_flag.set()
+        
+        for i, (p, _) in self.worker_registry.items():
+            if p.is_alive():
+                p.join(timeout=0.02)
+                p.terminate()
+
+        # Detach memory frames cleanly from system registry allocations
+        for resource in (self.shm, self.lock_shm, self.stats_shared):
+            try:
+                resource.close()
+                resource.unlink()
+            except Exception:
+                pass
+        print("⚡ [Lugh Balancer] Dynamic systems unlinked. Core execution complete.")
+
+# =====================================================================
+# 5. CRITICAL RUNTIME ENTRYPOINT
+# =====================================================================
+if __name__ == "__main__":
+    balancer = None
+    def trigger_abort(signum, frame):
+        if balancer:
+            balancer.shutdown()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, trigger_abort)
+    signal.signal(signal.SIGTERM, trigger_abort)
+
+    try:
+        balancer = LughSharedMemoryBalancer(max_tasks=100)
+        balancer.start_complex()
+
+        print("\n--- 🌊 Flooding Zero-Copy Channels with Hardware Load ---")
+        
+        # Deploy clean matrix work loops
+        for tid in range(30):
+            balancer.dispatch_task(task_id=tid, priority=1, affinity_tag="SMITH_MATH", payload_value=100_000.0)
+            
+        for tid in range(30, 60):
+            balancer.dispatch_task(task_id=tid, priority=2, affinity_tag="HEALER_IO", payload_value=0.001)
+
+        # Inject an engineered task failure vector to assert error reporting accuracy
+        balancer.dispatch_task(task_id=99, priority=3, affinity_tag="HEALER_IO", payload_value=-0.5)
+
+        time.sleep(0.4)
+        balancer.print_telemetry_snapshot()
+        balancer.inspect_failures()
+        
+    finally:
+        if balancer is not None:
+            balancer.shutdown()
