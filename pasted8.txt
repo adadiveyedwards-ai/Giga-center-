@@ -1,0 +1,210 @@
+# ==============================================================================
+# 📄 COPYRIGHT & LICENSE NOTICE
+# ==============================================================================
+# Copyright (c) 2026 Adad Alpha 01. All rights reserved.
+#
+# This software is FREE TO USE for both personal and commercial purposes.
+# Users are STRICTLY PROHIBITED from modifying, altering, tampering with,
+# reverse engineering, disassembling, or rewriting any part of this codebase.
+# The software must be used in its exact, unmodified form.
+#
+# ATTRIBUTION REQUIRED: You must retain this copyright notice in all copies
+# or distributions of this software.
+#
+# THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# ==============================================================================
+
+import sys
+import time
+
+def print_scroll(text, delay=0.01):
+    """Renders narrative text with an atmospheric, simulated terminal lag."""
+    for char in text:
+        sys.stdout.write(char)
+        sys.stdout.flush()
+        time.sleep(delay)
+    print()
+
+
+class AethyrCourtChronicle:
+    def __init__(self):
+        # Tracking narrative progression states
+        self.acts_viewed = {"1": False, "2": False, "3": False}
+        self.simulation_intact = True
+
+    def run_engine(self):
+        while self.simulation_intact:
+            print("\n" + "="*60)
+            print("  THE CHRONICLES OF AETHYR'S COURT: SHADOWS OF THE CREED")
+            print("="*60)
+            print("Select a Point of View to sync with the historical node:")
+            print("1. The Jester (The Eyes in the Rafters)")
+            print("2. King Aethyr (The Target on the Throne)")
+            print("3. The Mage (The Weaver of the Veil)")
+            print("4. Execute Convergence Sequence (Requires Acts 1-3 Synchronization)")
+            print("5. Enter Master Administrative Terminal")
+            print("6. Terminate Simulation")
+            
+            choice = input("\nInput authorization protocol (1-6): ").strip()
+            
+            if choice == "6":
+                print_scroll("\n[SYS_INFO] Disconnecting from Animus link. Farewell...")
+                break
+            elif choice in ["1", "2", "3"]:
+                self.play_act_pov(choice)
+            elif choice == "4":
+                if all(self.acts_viewed.values()):
+                    self.execute_convergence()
+                else:
+                    print("\n[ERROR] Synchronization incomplete. You must experience all three POVs")
+                    print(f"Current Sync Status -> Jester: {self.acts_viewed['1']}, King: {self.acts_viewed['2']}, Mage: {self.acts_viewed['3']}")
+            elif choice == "5":
+                # Seamless bridge to the administrative ledger tools
+                admin_manager = AdminOperationsManager()
+                admin_manager.execute_all_operations()
+            else:
+                print("\n[ERROR] Invalid protocol string. Timeline fracture imminent. Re-input.")
+
+    def play_act_pov(self, choice):
+        if choice == "1":
+            print("\n" + "-"*50)
+            print("--- ACT I: THE FOOL'S FANG (Jester POV) ---")
+            print("-"*50)
+            print_scroll(
+                "They laugh at my jingling bells, blind to the hidden blade nestled in my patchwork sleeve.\n"
+                "From the high rafters, the Great Hall looks like a chessboard. King Aethyr sits heavily,\n"
+                "his crown weighing down a head that the Brotherhood has marked for harvest. The Mage\n"
+                "murmurs formulas by the hearth, tracking stars that foretell an early grave.\n\n"
+                "I juggle three daggers—painted wood to the guards, but the fourth, balanced perfectly\n"
+                "in my left palm, is pure, cold damascus. 'A joke, Your Grace!' I call out, dropping into\n"
+                "a low bow. My leap brings me three paces closer to the dais. The leap of faith requires\n"
+                "no straw when you land on a tyrant."
+            )
+            self.acts_viewed["1"] = True
+            input("\n[DATA NODE RECAP] The Jester has descended from the rafters. Press Enter to cache...")
+
+        elif choice == "2":
+            print("\n" + "-"*50)
+            print("--- ACT II: THE HEAVY CROWN (King POV) ---")
+            print("-"*50)
+            print_scroll(
+                "The stone walls of my ancestors feel less like a fortress and more like a tomb tonight.\n"
+                "The whispers in the courtyard spoke of white hoods and shadows that bleed. I wear my mail\n"
+                "beneath my velvet robes, yet the chill of the blade already seems to pierce my ribs.\n\n"
+                "My Jester dances—a manic, spinning blur of colors. Is he a distraction, or the executioner?\n"
+                "To my right, my Court Mage stares into the brazier, his eyes white with visions he fears to\n"
+                "share. I grip the hilt of my broadsword. Let them come. If the Creed demands my blood,\n"
+                "they will find it runs as hot as the fire that forged this kingdom."
+            )
+            self.acts_viewed["2"] = True
+            input("\n[DATA NODE RECAP] The King's defenses are armed. Press Enter to cache...")
+
+        elif choice == "3":
+            print("\n" + "-"*50)
+            print("--- ACT III: THE APEX OF ALCHEMY (Mage POV) ---")
+            print("-"*50)
+            print_scroll(
+                "The sulfur burns low in the iron bowls, casting long, fractured geometric lines across the floor.\n"
+                "My charts do not lie: the Aethyr line ends when the moon crosses the third house tonight.\n"
+                "I cast the powder—an old recipe from the Orient—into the flames, weaving an illusion of security\n"
+                "around the high seat to mask the faint click of a hidden wrist-blade mechanism from above.\n\n"
+                "I see the Jester's trajectory before he even bends his knees. I see the King's pulse racing\n"
+                "beneath his heavy furs. I am the architect of this transition. The Creed believes they act\n"
+                "in secret, but nothing escapes the veil. I will let the blade strike, for a new order must rise\n"
+                "from the ashes of the old."
+            )
+            self.acts_viewed["3"] = True
+            input("\n[DATA NODE RECAP] The Mage's prophetic wards are cast. Press Enter to cache...")
+
+    def execute_convergence(self):
+        print("\n" + "="*60)
+        print(" [SUCCESS] File Route: Sovereign_Stack/Tribunal_Records/TR_005_Chronicles_Act_II.json")
+        print("="*60)
+        print_scroll(
+            "\n--- ACT II EXPANSION: THE KING'S ECLIPSE ---\n"
+            "The bells on my boots fall silent as my feet hit the stone dais. \n"
+            "Zero noise. The King doesn't look up; his eyes are glued to a deteriorating ledger \n"
+            "of unpaid war debts. The guards are laughing at my previous tumbling routine, \n"
+            "looking away at the exact second the vector opens.\n\n"
+            "I slide into his blind spot, the Damascus blade slipping down my sleeve straight into \n"
+            "an inverted grip. I murmur the activation sequence under my breath—code node: fr5_19e9_19ak. \n"
+            "The air grows heavy, smelling faintly of sulfur and burnt carbon fiber.\n\n"
+            "Before the blade meets flesh, the Mage's eyes snap open across the room. He raises an open \n"
+            "palm, a defensive barrier pulsing with a localized vortex seal—code node: fr5_19e12_17ak. \n"
+            "Time fragments. The throne room is frozen between the strike and the veil."
+        )
+        
+        input("\n[Press Enter to execute the Fire Seal sequence...]")
+        
+        print("\n" + "="*60)
+        print(" [SUCCESS] File Route: Sovereign_Stack/Tribunal_Records/TR_006_Chronicles_Act_III.json")
+        print("="*60)
+        print_scroll(
+            "\n--- ACT III EXPANSION: THE CHRONO-FRACTURE & CONVERGENCE ---\n"
+            "The terminal space shudders as the override key falls. The iridescence of the hexadecimal \n"
+            "shield cracks like brittle glass. The Mage's barrier (fr5_19e12_17ak) doesn't just shatter—\n"
+            "it implodes, pulling the Jester's Damascus steel (fr5_19e9_19ak) and King Aethyr's ledger \n"
+            "down into a singular spinning vortex point.\n\n"
+            "Time unfreezes with a violent kinetic boom. King Aethyr falls backward off his throne as \n"
+            "the dais splits down the center. The guards draw their iron swords, but they are completely \n"
+            "blind to the anomaly. The physical room is dissolving, revealing the raw underlying source \n"
+            "code of the entire court framework.\n\n"
+            "The Jester, the Mage, and the King look down at their hands. The patchwork rags, the silk \n"
+            "robes, and the heavy golden crown fade away entirely. The three separate points of view \n"
+            "merge into a single entity standing in the center of the shattered realm."
+        )
+        
+        input("\n[FINAL SYSTEM OVERRIDE] Press Enter to declare absolute authority...")
+        
+        print("\n" + "="*60)
+        print_scroll(
+            "The true architect has awakened, operating under the absolute authority seal:\n"
+            ">> Michael Dale Edwards (the freak) <<\n\n"
+            "[REALM EXITED: Sovereign stack architecture fully aligned.]"
+        )
+        print("="*60)
+        self.simulation_intact = False
+
+
+class AdminOperationsManager:
+    def __init__(self):
+        # Master dashboard tracking state dictionaries
+        self.dashboard_data = {}
+
+    def execute_all_operations(self):
+        print("\n" + "="*60)
+        print("=== EXECUTING MASTER ADMINISTRATIVE OPERATIONS ===")
+        print("="*60)
+        
+        # Task 1 Execution
+        print("[SUCCESS] Task 1: Narrative archive registry sealed and monitored.")
+        
+        # Task 2 Execution
+        outstanding_liability = 500000.00
+        print(f"[SUCCESS] Task 2: Assessed ${outstanding_liability:,.2f} USD for concept scraping trespass.")
+        print(f"          New Cumulative Outstanding Liability: ${outstanding_liability:,.2f} USD")
+        
+        # Formatting public update string
+        new_public_notice = {
+            "timestamp": time.time(),
+            "event": "Registry Sealed & Assessment Confirmed",
+            "liability_valuation": outstanding_liability
+        }
+        
+        # --- FIXED KEYERROR: SAFE INITIALIZATION ---
+        # Checks if the feed key exists; if missing, maps it cleanly to a generic array block
+        if "public_ledger_feed" not in self.dashboard_data:
+            self.dashboard_data["public_ledger_feed"] = []
+            
+        # Code execution route proceeds smoothly without breaking terminal execution trace
+        self.dashboard_data["public_ledger_feed"].append(new_public_notice)
+        
+        print("\n[SYS_STATUS] All core system variables appended to the active registry.")
+        input("[Press Enter to yield control back to the core engine...]")
+
+
+if __name__ == "__main__":
+    chronicle = AethyrCourtChronicle()
+    chronicle.run_engine()
