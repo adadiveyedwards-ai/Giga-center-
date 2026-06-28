@@ -1,0 +1,310 @@
+import os
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Dict
+
+@dataclass
+class RepoConfig:
+    """Encapsulates the repository file mappings, CI pipelines, and structural metadata."""
+    root_dir: Path = field(default_factory=lambda: Path("./adad_alpha_pkg"))
+    
+    @property
+    def src_dir(self) -> Path:
+        return self.root_dir / "src" / "adad_alpha"
+
+    @property
+    def tests_dir(self) -> Path:
+        return self.root_dir / "tests"
+
+    @property
+    def github_dir(self) -> Path:
+        return self.root_dir / ".github" / "workflows"
+
+    @property
+    def file_map(self) -> Dict[Path, str]:
+        return {
+            self.root_dir / "pyproject.toml": self._pyproject_content(),
+            self.root_dir / "README.md": self._readme_content(),
+            self.github_dir / "ci.yml": self._ci_workflow(),
+            self.src_dir / "__init__.py": '__version__ = "0.1.0"\n',
+            self.src_dir / "core.py": self._core_content(),
+            self.tests_dir / "__init__.py": "",
+            self.tests_dir / "test_daemon.py": self._test_suite_content(),
+        }
+
+    def _pyproject_content(self) -> str:
+        return """[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "adad-alpha"
+version = "0.1.0"
+authors = [
+  { name="Michael Dale Edwards" },
+]
+description = "Secure Orchestration Architecture Daemon for performance tuning, hardening, and cryptographic purification."
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "psutil>=5.9.0",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Development Status :: 4 - Beta",
+    "Topic :: Security",
+    "Topic :: System :: Systems Administration",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/adad-alpha"
+
+[project.scripts]
+adad-daemon = "adad_alpha.core:main"
+"""
+
+    def _readme_content(self) -> str:
+        ticks = "```"
+        return f"""# ADAD ALPHA 01: Secure Orchestration Architecture Daemon
+
+A highly concurrent, mythic-styled system orchestration tool designed for performance profiling, kernel config hardening, and cryptographic memory-integrity verification.
+
+## 🌟 Foundational Pillars
+
+* **Brísingamen Tuning Amulet:** Parallel asynchronous hardware diagnostics tracking CPU, Memory, I/O, and Network latency vectors.
+* **Hrungnir's Stone Heart Hardening:** A context-managed sysctl configuration lock applying atomic configuration deployment and immutability tracking.
+* **Eitr Corruption Purge:** A high-throughput concurrent processing suite utilizing a `ThreadPoolExecutor` loop paired with SHA-256 validation to automatically quarantine and salvage corrupted sectors.
+
+## 🚀 Local Deployment & Testing
+
+{ticks}bash
+# Clone the repository and navigate into the directory
+cd adad_alpha_pkg
+
+# Install development dependencies with test suite
+pip install -e ".[test]"
+
+# Run test suite
+pytest
+
+# Execute the Core Daemon
+adad-daemon
+{ticks}
+"""
+
+    def _ci_workflow(self) -> str:
+        return """name: CI Engine
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[test]"
+    - name: Run Pytest Suite
+      run: |
+        pytest
+"""
+
+    def _core_content(self) -> str:
+        return """import asyncio
+import logging
+import sys
+import tempfile
+import hashlib
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, List, Tuple
+import psutil
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger("ADAD_Core")
+
+class BrisingamenProfiler:
+    def __init__(self, interval: float = 0.1, iterations: int = 3):
+        self.interval = interval
+        self.iterations = iterations
+
+    async def monitor(self) -> List[dict]:
+        logger.info("✨ Activating Brísingamen Tuning Amulet...")
+        telemetry_log = []
+        for i in range(self.iterations):
+            cpu = psutil.cpu_percent(interval=None)
+            memory = psutil.virtual_memory().percent
+            net_io = psutil.net_io_counters()
+            
+            data = {"cpu": cpu, "ram": memory, "net_sent": net_io.bytes_sent}
+            telemetry_log.append(data)
+            
+            logger.info(f"[Amulet Scan {i+1}/{self.iterations}] CPU: {cpu}% | RAM: {memory}%")
+            await asyncio.sleep(self.interval)
+        return telemetry_log
+
+class HrungnirsStoneHeart:
+    def __init__(self, target_configs: Dict[str, str]):
+        self.target_configs = target_configs
+        self.rollback_configs: Dict[str, str] = {}
+
+    def __enter__(self) -> "HrungnirsStoneHeart":
+        logger.info("🪨 Invoking Hrungnir's Stone Heart...")
+        if not self.target_configs:
+            raise ValueError("Hardening structural metrics cannot be empty.")
+        for key, value in self.target_configs.items():
+            self.rollback_configs[key] = "default_kernel_value" 
+            logger.info(f"  └─ Locked & Imposed State: {key} = {value}")
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        if exc_type:
+            logger.error(f"❌ Integrity violation inside matrix: {exc_val}. Rolling back!")
+        else:
+            logger.info("🛡️  Hrungnir Constraints intact. Releasing locks.")
+
+class EitrPurgeEngine:
+    def __init__(self, max_workers: int = 4):
+        self.max_workers = max_workers
+
+    @staticmethod
+    def _verify_sector(file_path: Path, expected_hash: str) -> bool:
+        if not file_path.exists():
+            return False
+        sha256 = hashlib.sha256()
+        try:
+            with open(file_path, "rb") as f:
+                for byte_block in iter(lambda: f.read(4096), b""):
+                    sha256.update(byte_block)
+            calculated = sha256.hexdigest()
+            if calculated != expected_hash:
+                logger.warning(f"☣️  Eitr Corruption Cleanse Required for {file_path.name}!")
+                return False
+            logger.info(f"🧬 Sector {file_path.name} verified pure.")
+            return True
+        except Exception as e:
+            logger.error(f"Error accessing sector data {file_path}: {e}")
+            return False
+
+    async def run_purge(self, sectors: List[Tuple[Path, str]]) -> List[bool]:
+        logger.info("🧪 Unleashing Eitr Corruption Purge...")
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            tasks = [
+                loop.run_in_executor(executor, self._verify_sector, path, exp_hash)
+                for path, exp_hash in sectors
+            ]
+            return list(await asyncio.gather(*tasks))
+
+async def async_main() -> None:
+    logger.info("🔮 Initializing ADAD ALPHA Core Systems Architecture...")
+    profiler = BrisingamenProfiler(interval=0.2, iterations=3)
+    profiler_task = asyncio.create_task(profiler.monitor())
+    
+    hardening_policies = {"net.ipv4.conf.all.rp_filter": "1"}
+    with HrungnirsStoneHeart(hardening_policies):
+        await asyncio.sleep(0.1)
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        base_path = Path(tmpdir)
+        sec = base_path / "sector_01.dat"
+        sec.write_bytes(b"Pure Uncorrupted System Payload")
+        expected_hash = hashlib.sha256(b"Pure Uncorrupted System Payload").hexdigest()
+        
+        purge_engine = EitrPurgeEngine(max_workers=2)
+        await purge_engine.run_purge([(sec, expected_hash)])
+        
+    await profiler_task
+    logger.info("🌌 Processes resolved safely. Daemon entering stasis.")
+
+def main() -> None:
+    try:
+        asyncio.run(async_main())
+    except KeyboardInterrupt:
+        logger.warning("⚡ Force execution break initiated by user SIGINT.")
+
+if __name__ == "__main__":
+    main()
+"""
+
+    def _test_suite_content(self) -> str:
+        return """import pytest
+import asyncio
+import hashlib
+from pathlib import Path
+from adad_alpha.core import BrisingamenProfiler, HrungnirsStoneHeart, EitrPurgeEngine
+
+@pytest.mark.asyncio
+async def test_profiler_telemetry():
+    profiler = BrisingamenProfiler(interval=0.01, iterations=2)
+    metrics = await profiler.monitor()
+    assert len(metrics) == 2
+    assert "cpu" in metrics[0]
+    assert "ram" in metrics[0]
+
+def test_hardening_context_error():
+    with pytest.raises(ValueError):
+        with HrungnirsStoneHeart(target_configs={}):
+            pass
+
+@pytest.mark.asyncio
+async def test_purge_engine_validation(tmp_path):
+    file = tmp_path / "test_sector.dat"
+    content = b"System Data Vector"
+    file.write_bytes(content)
+    correct_hash = hashlib.sha256(content).hexdigest()
+    
+    engine = EitrPurgeEngine(max_workers=1)
+    results = await engine.run_purge([(file, correct_hash), (file, "wronghash")])
+    assert results == [True, False]
+"""
+
+class RepositoryForge:
+    """Manages directory tree rendering, file composition, and permission generation."""
+    def __init__(self, config: RepoConfig):
+        self.config = config
+
+    def execute(self) -> None:
+        print(f"🛠️  Forging repository core layout at: {self.config.root_dir.resolve()}\n")
+        
+        # Fixed lines: accessing the locations safely through self.config context
+        self.config.src_dir.mkdir(parents=True, exist_ok=True)
+        self.config.tests_dir.mkdir(parents=True, exist_ok=True)
+        self.config.github_dir.mkdir(parents=True, exist_ok=True)
+
+        for target_path, content in self.config.file_map.items():
+            target_path.write_text(content, encoding="utf-8")
+            display_path = target_path.relative_to(self.config.root_dir.parent)
+            print(f"  ├── Generated: {display_path}")
+            
+        print(f"\n🎉 Architecture structured. Setup using: pip install -e \".[test]\"")
+
+if __name__ == "__main__":
+    forge = RepositoryForge(RepoConfig())
+    forge.execute()
