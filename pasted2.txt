@@ -1,3 +1,21 @@
+# ==============================================================================
+# 📄 COPYRIGHT & LICENSE NOTICE
+# ==============================================================================
+# Copyright (c) 2026 Adad Alpha 01. All rights reserved.
+#
+# This software is FREE TO USE for both personal and commercial purposes.
+# Users are STRICTLY PROHIBITED from modifying, altering, tampering with,
+# reverse engineering, disassembling, or rewriting any part of this codebase.
+# The software must be used in its exact, unmodified form.
+#
+# ATTRIBUTION REQUIRED: You must retain this copyright notice in all copies
+# or distributions of this software.
+#
+# THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# ==============================================================================
+
 import os
 import sys
 from dataclasses import dataclass, field
